@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Holiday Card NFT</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.6.1/web3.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        background-color: #f4f4f9;
+      }
+      h1 {
+        text-align: center;
+      }
+      .section {
+        margin: 20px 0;
+      }
+      label {
+        margin-right: 10px;
+      }
+      input,
+      textarea {
+        margin-bottom: 10px;
+        padding: 5px;
+      }
+      button {
+        padding: 10px 15px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      #card-list {
+        margin-top: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Holiday Card NFT</h1>
+    <div class="section" id="connect-wallet">
+      <button onclick="connectWallet()">Connect Wallet</button>
+      <p id="user-account">Not connected</p>
+    </div>
+
+    <div class="section" id="mint-card-section">
+      <h2>Mint a Holiday Card</h2>
+      <label for="message">Message:</label><br />
+      <textarea id="message" rows="3" cols="30"></textarea><br />
+
+      <label for="recipient-name">Recipient Name:</label><br />
+      <input type="text" id="recipient-name" /><br />
+
+      <label for="holiday-type">Holiday Type:</label><br />
+      <input type="text" id="holiday-type" /><br />
+
+      <button onclick="mintHolidayCard()">Mint Holiday Card</button>
+    </div>
+
+    <div class="section" id="view-cards-section">
+      <h2>Your Holiday Cards</h2>
+      <button onclick="loadUserCards()">View Your Cards</button>
+      <ul id="card-list"></ul>
+    </div>
+
+    <div class="section" id="total-cards-section">
+      <h2>Total Cards Minted</h2>
+      <p id="total-cards">Loading...</p>
+    </div>
+
+    <script>
+      let web3;
+      let contract;
+      let userAccount;
+      const contractAddress = "0x00C3E5Fc122c6195dCE0A0628Dd957202559d299"; // Replace with your contract address
+      const contractABI = [
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "uint256",
+              name: "cardId",
+              type: "uint256",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "string",
+              name: "recipientName",
+              type: "string",
+            },
+            {
+              indexed: false,
+              internalType: "string",
+              name: "holidayType",
+              type: "string",
+            },
+          ],
+          name: "CardMinted",
+          type: "event",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "_owner",
+              type: "address",
+            },
+          ],
+          name: "getCardsByOwner",
+          outputs: [
+            {
+              components: [
+                {
+                  internalType: "address",
+                  name: "owner",
+                  type: "address",
+                },
+                {
+                  internalType: "string",
+                  name: "message",
+                  type: "string",
+                },
+                {
+                  internalType: "string",
+                  name: "recipientName",
+                  type: "string",
+                },
+                {
+                  internalType: "string",
+                  name: "holidayType",
+                  type: "string",
+                },
+                {
+                  internalType: "uint256",
+                  name: "timestamp",
+                  type: "uint256",
+                },
+              ],
+              internalType: "struct SimpleHolidayCardNFT.HolidayCard[]",
+              name: "",
+              type: "tuple[]",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "getTotalCards",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          name: "holidayCards",
+          outputs: [
+            {
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              internalType: "string",
+              name: "message",
+              type: "string",
+            },
+            {
+              internalType: "string",
+              name: "recipientName",
+              type: "string",
+            },
+            {
+              internalType: "string",
+              name: "holidayType",
+              type: "string",
+            },
+            {
+              internalType: "uint256",
+              name: "timestamp",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "string",
+              name: "_message",
+              type: "string",
+            },
+            {
+              internalType: "string",
+              name: "_recipientName",
+              type: "string",
+            },
+            {
+              internalType: "string",
+              name: "_holidayType",
+              type: "string",
+            },
+          ],
+          name: "mintHolidayCard",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          name: "ownerCardIndex",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+      ];
+
+      // Connect to the user's wallet
+      async function connectWallet() {
+        if (window.ethereum) {
+          web3 = new Web3(window.ethereum);
+          try {
+            await window.ethereum.enable(); // Request wallet connection
+            userAccount = await web3.eth.getAccounts();
+            document.getElementById(
+              "user-account"
+            ).innerText = `Connected: ${userAccount[0]}`;
+            contract = new web3.eth.Contract(contractABI, contractAddress);
+            loadTotalCards(); // Load the total number of cards minted
+          } catch (error) {
+            console.error("User denied account access");
+          }
+        } else {
+          alert("Please install MetaMask to use this feature");
+        }
+      }
+
+      // Mint a new holiday card
+      async function mintHolidayCard() {
+        const message = document.getElementById("message").value;
+        const recipientName = document.getElementById("recipient-name").value;
+        const holidayType = document.getElementById("holiday-type").value;
+
+        if (!message || !recipientName || !holidayType) {
+          alert("All fields are required!");
+          return;
+        }
+
+        try {
+          await contract.methods
+            .mintHolidayCard(message, recipientName, holidayType)
+            .send({ from: userAccount[0] });
+          alert("Holiday card minted successfully!");
+          loadUserCards(); // Refresh the user's cards list
+        } catch (error) {
+          console.error(error);
+          alert("Error minting card.");
+        }
+      }
+
+      // Load cards owned by the user
+      async function loadUserCards() {
+        try {
+          const cards = await contract.methods
+            .getCardsByOwner(userAccount[0])
+            .call();
+          const cardList = document.getElementById("card-list");
+          cardList.innerHTML = ""; // Clear existing list
+
+          cards.forEach((card) => {
+            const listItem = document.createElement("li");
+            listItem.innerHTML = `
+                        <strong>${card.recipientName}</strong> (${
+              card.holidayType
+            })<br>
+                        Message: ${card.message}<br>
+                        Minted on: ${new Date(
+                          card.timestamp * 1000
+                        ).toLocaleString()}<br><br>
+                    `;
+            cardList.appendChild(listItem);
+          });
+        } catch (error) {
+          console.error(error);
+          alert("Error loading your cards.");
+        }
+      }
+
+      // Load the total number of cards minted
+      async function loadTotalCards() {
+        try {
+          const totalCards = await contract.methods.getTotalCards().call();
+          document.getElementById(
+            "total-cards"
+          ).innerText = `Total Cards Minted: ${totalCards}`;
+        } catch (error) {
+          console.error(error);
+          alert("Error loading total cards.");
+        }
+      }
+    </script>
+  </body>
+</html>
